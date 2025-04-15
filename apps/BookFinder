@@ -1,0 +1,176 @@
+// Book Info & Rec App — Styled for Page it Forward w/ Logo, Social, Genres, Learn More
+import React, { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const genres = [
+  "Fantasy", "Mystery", "Romance", "Science Fiction", "Non-fiction", "Biography",
+  "Historical", "Thriller", "Horror", "Adventure", "Poetry", "Classics", "Young Adult",
+  "Children's", "Comics", "Self-help", "Philosophy", "Drama"
+];
+
+export default function BookFinder() {
+  const [query, setQuery] = useState("");
+  const [bookData, setBookData] = useState(null);
+  const [similarBooks, setSimilarBooks] = useState([]);
+  const [genreGallery, setGenreGallery] = useState({});
+  const [error, setError] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+
+  const fetchBook = async () => {
+    try {
+      setError(null);
+      setBookData(null);
+      setSimilarBooks([]);
+
+      const res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`
+      );
+      const data = await res.json();
+
+      if (!data.items || data.items.length === 0) {
+        setError("No book found. Try a different title.");
+        return;
+      }
+
+      const book = data.items[0].volumeInfo;
+      setBookData(book);
+
+      const titleWords = query.split(" ").slice(0, 2).join("+");
+      const recRes = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${titleWords}`
+      );
+      const recData = await recRes.json();
+      setSimilarBooks(recData.items?.slice(1, 5) || []);
+    } catch (err) {
+      setError("Something went wrong. Try again later.");
+    }
+  };
+
+  const fetchGenreGallery = async () => {
+    const gallery = {};
+    for (let genre of genres) {
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=subject:${genre}&maxResults=4`);
+      const data = await res.json();
+      if (data.items) gallery[genre] = data.items;
+    }
+    setGenreGallery(gallery);
+  };
+
+  useEffect(() => {
+    fetchGenreGallery();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLocation(pos.coords),
+        (err) => console.warn("Geolocation not permitted or failed.")
+      );
+    }
+  }, []);
+
+  const getLibraryLink = () => {
+    if (!userLocation) return null;
+    const { latitude, longitude } = userLocation;
+    return `https://www.google.com/maps/search/library/@${latitude},${longitude},12z`;
+  };
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto bg-yellow-50 border border-purple-100 rounded-2xl shadow-md">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-3xl font-bold text-purple-600">Page it Forward</h1>
+        <a href="https://thepageforwardproject.org" target="_blank" rel="noopener noreferrer">
+          <img src="https://thepageforwardproject.org/logo.png" alt="Page it Forward Logo" className="h-12" />
+        </a>
+      </div>
+      <p className="text-md text-gray-700 mb-2">@pageforwardproject • <a href="https://thepageforwardproject.org" className="underline text-blue-600">Visit site</a></p>
+      <p className="text-md text-gray-700 mb-4">
+        Search a book to get community reviews, ratings, and colorful suggestions!
+      </p>
+
+      <div className="flex gap-2 mb-4">
+        <Input
+          placeholder="Enter a book title..."
+          value={query}
+          className="border-pink-300 focus:ring-pink-400"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <Button
+          className="bg-pink-400 hover:bg-pink-500 text-white font-bold"
+          onClick={fetchBook}
+        >
+          Search
+        </Button>
+      </div>
+
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+
+      {bookData && (
+        <Card className="mb-6 bg-white border-l-8 border-blue-300">
+          <CardContent className="p-4">
+            <h2 className="text-xl font-semibold text-blue-600">{bookData.title}</h2>
+            <p className="text-sm text-gray-600 mb-2">
+              {bookData.authors?.join(", ")}
+            </p>
+            <p className="text-gray-800">{bookData.description?.substring(0, 300) || "No description."}</p>
+            {bookData.averageRating && (
+              <p className="mt-2 font-medium text-purple-700">
+                ⭐ Rating: {bookData.averageRating} / 5
+                {bookData.ratingsCount && (
+                  <span className="text-sm text-gray-500"> ({bookData.ratingsCount} public reviews)</span>
+                )}
+              </p>
+            )}
+            {!bookData.averageRating && (
+              <p className="mt-2 text-gray-500">No rating available.</p>
+            )}
+            <div className="mt-4 flex flex-col gap-2">
+              <a href="mailto:hello@thepageforwardproject.org" className="text-sm text-blue-600 underline">Contact us about bundling this book</a>
+              {getLibraryLink() && (
+                <a href={getLibraryLink()} target="_blank" className="text-sm text-pink-600 underline">Find at a library near you</a>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {similarBooks.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-yellow-700 mb-2">You might also like</h3>
+          <div className="grid gap-4">
+            {similarBooks.map((book, i) => (
+              <Card key={i} className="bg-pink-50 border-l-4 border-purple-400">
+                <CardContent className="p-3">
+                  <p className="font-medium text-blue-700">{book.volumeInfo.title}</p>
+                  <p className="text-sm text-gray-600">
+                    {book.volumeInfo.authors?.join(", ")}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-10">
+        <h2 className="text-xl font-bold text-purple-700 mb-4">Browse by Genre</h2>
+        {Object.entries(genreGallery).map(([genre, books]) => (
+          <div key={genre} className="mb-6">
+            <h3 className="text-lg font-semibold text-pink-600 mb-2">{genre}</h3>
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+              {books.map((book, i) => (
+                <Card key={i} className="bg-white border-l-4 border-yellow-300">
+                  <CardContent className="p-3">
+                    <p className="font-medium text-blue-700">{book.volumeInfo.title}</p>
+                    <p className="text-sm text-gray-600">
+                      {book.volumeInfo.authors?.join(", ") || "Unknown author"}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
